@@ -111,7 +111,7 @@ di = snicarAD_v4(input_args)
 % plot modeled spectral albedo:
 if (1==1)
     figure(1)
-    plot(di.wvl,di.albedo,'linewidth',3, 'DisplayName','SNICAR-ADv4 r = 1000');
+    plot(di.wvl,di.albedo,'linewidth',3, 'DisplayName','SNICAR-ADv4');
     axis([0.2 2.5 0 1]);
     set(gca,'xtick',0.2:0.5:5,'fontsize',14)
     set(gca,'ytick',0:0.1:1.0,'fontsize',14);
