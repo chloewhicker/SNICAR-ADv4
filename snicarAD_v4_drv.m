@@ -1,29 +1,29 @@
 % Driver for SNICARv3 or SNICAR-ADv3 subroutine
 
-clear;
+clear; close all; clc; 
     
 % 1= Direct-beam incident flux, 0= Diffuse incident flux
 % NOTE that cloudy-sky spectral fluxes are loaded when direct_beam=0
 input_args.direct_beam   = 1;   
 
 % COSINE OF SOLAR ZENITH ANGLE FOR DIRECT-BEAM RT
-input_args.coszen = 0.5;
+input_args.coszen = cos(deg2rad(50));
   
 % SNOW LAYER THICKNESSES [m]:
-input_args.dz = [0.02 0.02 0.05 1.0]; % multi-layer snowpack
+input_args.dz = [0.5 1 10]; % multi layer column 
 %input_args.dz = [1000]; % single, optically-semi-infinite layer
 
 nbr_lyr = length(input_args.dz);  % number of snow layers
 
 % LAYER MEDIUM TYPE [ 1=snow, 2=ice]
 %  Must have same length as dz
-input_args.lyr_typ(1:nbr_lyr) = [1,1,2,2];
+input_args.lyr_typ(1:nbr_lyr) = [1, 2, 2]; % snow, ice, ice 
 
 % SNOW DENSITY FOR EACH LAYER (units: kg/m3)
-input_args.rho_snw(1:nbr_lyr) = [400,400,500,800];
+input_args.rho_snw(1:nbr_lyr) = [400, 650, 850]; 
 
 % SNOW GRAIN SIZE FOR EACH LAYER (units: microns):
-input_args.rds_snw(1:nbr_lyr) = 100;
+input_args.rds_snw(1:nbr_lyr) = [500, 150, 300]; % snow grains, air bubbles, air bubbles 
   
 % ICE REFRACTIVE INDEX DATASET TO USE:
 % 1=Warren (1984); 2=Warren and Brandt (2008); 3=Picard et al. (2016); 4=CO2 ice
@@ -31,7 +31,7 @@ input_args.ice_ri = 3;
     
 % Snow grain shape option
 % 1=sphere; 2=spheroid; 3=hexagonal plate; 4=koch snowflake
-input_args.sno_shp(1:nbr_lyr)  = 1;
+input_args.sno_shp(1:nbr_lyr)  = 3;
 
 % Shape factor: ratio of nonspherical grain effective radii to that of equal-volume sphere
 % 0=use recommended default value (He et al. 2017);
@@ -58,11 +58,13 @@ input_args.mss_cnc_sot1(1:nbr_lyr)  = 0.0;    % uncoated black carbon [ng/g]
 input_args.mss_cnc_sot2(1:nbr_lyr)  = 0.0;    % sulfate-coated black carbon [ng/g]
 input_args.mss_cnc_brc1(1:nbr_lyr)  = 0.0;    % uncoated brown carbon [ng/g]
 input_args.mss_cnc_brc2(1:nbr_lyr)  = 0.0;    % sulfate-coated brown carbon [ng/g]
+
 input_args.mss_cnc_dst1(1:nbr_lyr)  = 0.0;    % dust size 1 (r=0.05-0.5um) [ug/g]
 input_args.mss_cnc_dst2(1:nbr_lyr)  = 0.0;    % dust size 2 (r=0.5-1.25um) [ug/g]
 input_args.mss_cnc_dst3(1:nbr_lyr)  = 0.0;    % dust size 3 (r=1.25-2.5um) [ug/g]
 input_args.mss_cnc_dst4(1:nbr_lyr)  = 0.0;    % dust size 4 (r=2.5-5.0um)  [ug/g]
 input_args.mss_cnc_dst5(1:nbr_lyr)  = 0.0;    % dust size 5 (r=5.0-50um)   [ug/g]
+
 input_args.mss_cnc_ash1(1:nbr_lyr)  = 0.0;    % volcanic ash size 1 (r=0.05-0.5um) [ug/g]
 input_args.mss_cnc_ash2(1:nbr_lyr)  = 0.0;    % volcanic ash size 2 (r=0.5-1.25um) [ug/g]
 input_args.mss_cnc_ash3(1:nbr_lyr)  = 0.0;    % volcanic ash size 3 (r=1.25-2.5um) [ug/g]
@@ -76,14 +78,14 @@ input_args.dcmf_pig_chlb(1:nbr_lyr)         = 0.005;  % dry cell mass fraction o
 input_args.dcmf_pig_cara(1:nbr_lyr)         = 0.05;   % dry cell mass fraction of photoprotective_carotenoids
 input_args.dcmf_pig_carb(1:nbr_lyr)         = 0.00;   % dry cell mass fraction of photosynthetic_carotenoids  
 
-input_args.glc_alg_mss_cnc(1:nbr_lyr)       = 0.0;    % GLACIER algae [UNITS ng/g] 
+input_args.glc_alg_mss_cnc(1:nbr_lyr)       = 0.0;  % GLACIER algae [UNITS ng/g] = ppb 
 input_args.glc_alg_rds                      = 4;    % GLACIER algae radius [um]
 input_args.glc_alg_len                      = 40;   % GLACIER algae length [um]
     
 % REFLECTANCE OF SURFACE UNDERLYING SNOW: (Value is applied to all
 % wavelengths. User can alternatively specify spectrally-dependent
 % ground albedo in snicar_v3.m)
-input_args.R_sfc_all_wvl = 0.25;
+input_args.R_sfc_all_wvl = 0.0;
 
 % ATMOSPHERIC PROFILE for surface-incident flux:
 %     1 = mid-latitude winter
@@ -108,12 +110,18 @@ di = snicarAD_v4(input_args)
 
 % plot modeled spectral albedo:
 if (1==1)
-    plot(di.wvl,di.albedo,'b','linewidth',3);
+    figure(1)
+    plot(di.wvl,di.albedo,'linewidth',3, 'DisplayName','SNICAR-ADv4 r = 1000');
     axis([0.2 2.5 0 1]);
-    set(gca,'xtick',0.2:0.2:2.5,'fontsize',14)
+    set(gca,'xtick',0.2:0.5:5,'fontsize',14)
     set(gca,'ytick',0:0.1:1.0,'fontsize',14);
     xlabel('Wavelength (\mum)','fontsize',20);
     ylabel('Hemispheric Albedo','fontsize',20);
     grid on;
+    legend();
+    hold on 
 end;
+
+
+
 
