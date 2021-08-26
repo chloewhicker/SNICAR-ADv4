@@ -1,6 +1,13 @@
 # SNICARADv4 
 
 This code uses a two-stream approximation to calculate snow and ice spectral albedo and radiative fluxes at the interfaces of any number of snow or ice layers with distinct properties.
+To see earlier versions of the model go to:
+http://snow.engin.umich.edu or https://github.com/mflanner/SNICARv3 
+
+For additional reading on the model see: 
+- Flanner, M. G., Arnheim, J., Cook, J. M., Dang, C., He, C., Huang, X., Singh, D., Skiles, S. M., Whicker, C. A., and Zender, C. S.: SNICAR-AD v3: A Community Tool for Modeling Spectral Snow Albedo, 1–49, https://doi.org/10.5194/gmd-2021-182, 2021.
+- Whicker et al., 2021
+
 
 The optical properties of bubbles in ice: http://snow.engin.umich.edu/opticalprops/snicar_v3_optics_202105/bubbles.tar.gz 
 
