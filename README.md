@@ -17,11 +17,11 @@ The optical properties of snow grains and all LAC: https://github.com/mflanner/S
 
 # To download the model:
 1) download the model (snicarAD_v4.m)and model driver (snicarAD_v4_drv.m)
-2) download all snow grain, LAC, and bubble optical properties (linked above) and unpack the optics libraries - you should have a file titled "snicar_480band" 
-3) place the "bbl" file within /snicar_480band 
-4) place the glacier algae file (Cook2020_glacier_algae_4_40.nc) within /snicar_480band/alg_pig
-5) place "FL_reflection_diffuse.nc" within /snicar_480band 
-6) place "rfidx_ice.nc" within /snicar_480band 
+2) download all snow grain and LAC optical properties (https://github.com/mflanner/SNICARv3/blob/master/Links%20to%20optics%20libraries.md ) and unpack the optics libraries - you should have a file titled "snicar_480band" 
+3) download the bubble optical properties (http://snow.engin.umich.edu/opticalprops/snicar_v3_optics_202105/bubbles.tar.gz) place the 'bbl' file into the 'snicar_480band' file
+5) place the glacier algae file (Cook2020_glacier_algae_4_40.nc) into /snicar_480band/alg_pig
+6) place the diffuse Fresnel Layer reflection file (FL_reflection_diffuse.nc) and the ice  refractive indices file within /snicar_480band
+
 
 # To run the model: 
 1) In snicarAD_v4.m, set variable "dir_op_root" to the directory where you unpacked the optics library
