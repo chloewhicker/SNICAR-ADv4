@@ -1,4 +1,4 @@
-# SNICARADv4 
+# SNICAR-ADv4 
 
 This code uses a two-stream approximation to calculate snow and ice spectral albedo and radiative fluxes at the interfaces of any number of snow or ice layers with distinct properties.
 To see earlier versions of the model go to:
