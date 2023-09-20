@@ -5,7 +5,7 @@ To see earlier versions of the model go to:
 http://snow.engin.umich.edu or https://github.com/mflanner/SNICARv3 
 
 For additional reading on the model see: 
-- Whicker et al., 2021
+- Whicker, C. A., Flanner, M. G., Dang, C., Zender, C. S., Cook, J. M., & Gardner, A. S. (2022). SNICAR-ADv4: A physically based radiative transfer model to represent the spectral albedo of glacier ice. The Cryosphere, 16(4), 1197–1220. https://doi.org/10.5194/tc-16-1197-2022
 - Flanner, M. G., Arnheim, J., Cook, J. M., Dang, C., He, C., Huang, X., Singh, D., Skiles, S. M., Whicker, C. A., and Zender, C. S.: SNICAR-AD v3: A Community Tool for Modeling Spectral Snow Albedo, 1–49, https://doi.org/10.5194/gmd-2021-182, 2021.
 
 
