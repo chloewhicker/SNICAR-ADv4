@@ -1,9 +1,26 @@
- 
+
+% last edited by C.Whicker MAY 20th
+% - added bubble properties
+% - added the ability to include pure ice layers
+%        - snell's law & Fresnel layer
+% - added an input of lyr_typ
+% - added glacier algae as an impurity, input as a mass of dry algae
+%   currently can only have a radius of 4 and length of 40 (to be updated
+%   when Joe gets optical measurements at 200 wavelength)
+% - changed the input names for snow algae to 'snw_alg_cell_nbr_conc' so it
+%   is  more clear with the addition of GA
+% - added outputs of (1) number concentration of air bubbles in every ice
+%   layer, (2) volume fraction of air in each ice layer, (3) SSA of snow
+%   and ice layers
+% - change FL diffuse reflection to be spectrally varying (need another .nc
+%   file (FL_reflection_diffuse.nc)
+% - changed the representation of the FL equations to account for absorption
+% - changed the FL to account for total internal refleaction
 % %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % % %
 % The Snow, Ice, and Aerosol Radiative Model with Adding-Doubling
-% solver, version 4.0 (SNICAR-ADv4)
+% solver, version 4.0 (SNICAR-ADv3)
 %
 % References cited and open-source license are at end of file.
 %
@@ -20,18 +37,12 @@
 % Input parameters are described below. The user can run this code as
 % a script instead of a function by commenting out the function line
 % and setting '1==1' below the function definition.
-%
-% Please contact cwhicker@umich.edu with questions or concerns relating to
-% SNICAR-ADv4
-%
-%%%%%%%%%   FEATURES IN THIS RELEASE   %%%%%%%%%%%%
-%  - Pure ice properties (Whicker et al., 2021)
-%  - Fresnel Layer and snells law applied to ice surfaces (Brigleb and
-%    Light, 2007) and extended to be spectrally varying (Whicker et al.,
-%    2021)
-%  - Glacier algae optical properties (Whicker et al., 2021; Cook et al.,
-%    2020) 
+
+%%%%%%%%%    NEW FEATURES IN THIS RELEASE   %%%%%%%%%%%%
 %  - Adding-Doubling solver (Dang et al., 2019)
+%  - Pure ice properties (Whicker et al, in prep)
+%  - Fresnel Layer and snells law applied to ice surfaces (Brigleb and
+%    Light, 2007)
 %  - Snow algae (Cook et al., 2017)
 %  - Glacier Algae (Cook et al., 2020)
 %  - Non-spherical ice particles (He et al., 2017)
@@ -49,8 +60,7 @@
 %    - Warren and Brandt (2008)
 %    - Picard et al. (2016)
 %  - Several new options for surface spectral irradiance weighting
-%  - Extension of the simulated spectrum down to 0.2um (Flanner et al.,
-%    2021)
+%  - Extension of the simulated spectrum down to 0.2um
 
 
 %%%%%%%%%%  Input parameters: %%%%%%%%%%%
@@ -69,9 +79,9 @@
 %                  6 = High Mountain (summer, surface pressure of 556 hPa)
 %                  7 = Top-of-atmosphere
 %
-% flx_dwn_bb:    Broadband surface-incident solar flux [W/m2]. 
+% flx_dwn_bb:    Broadband surface-incident solar flux [W/m2].
 %                  Spectral flux fractions, determined by the
-%                  atmospheric profile and direct_beam/cloudy flag, 
+%                  atmospheric profile and direct_beam/cloudy flag,
 %                  are scaled by this constant
 
 % coszen:        Cosine of solar zenith angle (only applies when direct_beam=1)
@@ -83,11 +93,11 @@
 %                  3 = Picard et al (2016)
 %                  4 = CO2 ice, Hansen (2005)
 %
-% R_sfc_all_wvl  Broadband albedo of underlying surface 
+% R_sfc_all_wvl  Broadband albedo of underlying surface
 %                  Range: 0-1
 %                  (user can also define a spectrally-dependent albedo below)
 %
-% dz:            Array of snow layer thicknesses [meters]. Top layer has index 1. 
+% dz:            Array of snow layer thicknesses [meters]. Top layer has index 1.
 %                  *** THE LENGTH OF THIS ARRAY DEFINES THE NUMBER OF SNOW LAYERS ***
 %
 % rho_snw:       Array of snow layer densities [kg m-3].
@@ -95,9 +105,9 @@
 %
 % lyr_typ:       Array of layer type indicators
 %                   Must have the same length as dz
-%                        1 = snow 
+%                        1 = snow
 %                        2 = ice
-% 
+%
 % rds_snw:       Array of snow layer effective grain radii [microns]
 %                  Must have same length as dz
 %
@@ -105,7 +115,6 @@
 % sno_shp:      Snow grain shape
 %               1=sphere (original SNICAR scheme)
 %               2=spheroid; 3=hexagonal plate; 4=koch snowflake
-%               air bubbles within ice are always spheres
 % sno_fs:       Shape factor: ratio of nonspherical grain effective radii to that of equal-volume sphere
 %               0=use recommended default value (He et al., 2017);
 %               others(0<fs<1)= use user-specified value
@@ -183,7 +192,7 @@
 % dcmf_pig_cara: Dry cell mass fraction of photoprotective carotenoids
 %                  Valid values are: 0.00-0.15 by 0.01 increments
 %
-% dcmf_pig_carb: Dry cell mass fraction of photosynthetic carotenoids  
+% dcmf_pig_carb: Dry cell mass fraction of photosynthetic carotenoids
 %                  Valid values are: 0.00-0.15 by 0.01 increments
 %
 % glc_alg_mss_cnc: Dry cell mass of glacier algae [ng of dry cell mass/g of ice]
@@ -202,8 +211,8 @@
 
 %%%%%%%%%%%%% BEGIN CODE: %%%%%%%%%%%%%%%
 
-function data_out = snicarAD_v4(input_args)
-
+function data_out = snicarAD_v4_co2ice(input_args)
+addpath('snicar_480band')
 % ROOT DIRECTORY FOR ALL OPTICAL AND SPECTRAL IRRADIANCE FILES
 dir_op_root = 'snicar_480band/';
 
@@ -212,12 +221,12 @@ dir_op_root = 'snicar_480band/';
 %   (1) COMMENT OUT THE FUNCTION CALL ABOVE
 %   (2) SET 1==1 BELOW AND DEFINE ALL INPUT IN THIS BLOCK
 
-if (0==1)
+if (1==1)
 
     % RADIATIVE TRANSFER CONFIGURATION:
     direct_beam   = 1;   % 1= Direct-beam incident flux, 0= Diffuse incident flux
-                         % NOTE that cloudy-sky spectral fluxes are loaded when direct_beam=0
-    
+    % NOTE that cloudy-sky spectral fluxes are loaded when direct_beam=0
+
     % ATMOSPHERIC PROFILE for surface-incident flux:
     %    1 = mid-latitude winter
     %    2 = mid-latitude summer
@@ -235,11 +244,11 @@ if (0==1)
     flx_dwn_bb = 1.0;
 
     % COSINE OF SOLAR ZENITH ANGLE FOR DIRECT-BEAM RT
-    coszen = 0.5;
-  
+    coszen = 0.62;
+
     % ICE REFRACTIVE INDEX DATASET TO USE:
-    ice_ri = 3;
-    
+    ice_ri = 4;
+
     % REFLECTANCE OF SURFACE UNDERLYING SNOW:
     % (value applied to all wavelengths.  user can also specify
     % spectrally-dependent ground albedo below)
@@ -247,44 +256,45 @@ if (0==1)
 
     % SNOW OR ICE LAYER THICKNESSES [m]:
     %dz = [0.02 0.02 0.05];
-    dz = [1000];
+    dz = [0.0071,0.0279,0.0623,0.1189,0.2122,0.3661,0.6198];
+    %dz = sum(dz)
     nbr_lyr = length(dz);  % number of layers
-    
+
     % LAYER MEDIUM TYPE [ 1=snow, 2=ice]
     %  Must have same length as dz
-    lyr_typ(1:nbr_lyr) = [1];
-    
+    lyr_typ(1:nbr_lyr) = [2];
+
     % SNOW DENSITY FOR EACH LAYER (units: kg/m3)
-    rho_snw(1:nbr_lyr) = 150;
+    rho_snw(1:nbr_lyr) = 910;
 
     % SNOW GRAIN SIZE FOR EACH SNOW LAYER ?R BUBBLE RADIUS FOR ICE
     % (units: microns):
-    rds_snw(1:nbr_lyr) = 1000;
-  
+    rds_snw(1:nbr_lyr) = 750;
+
     % Options added by Cenlin He for nonspherical ice particles based on
     % the parameterizations described by He et al. (2017,
     % doi:10.1175/JCLI-D-17-0300.1)
-    % these options are only relevant to snow grains (ie lyr_typ = 1) 
-    
+    % these options are only relevant to snow grains (ie lyr_typ = 1)
+
     sno_shp(1:nbr_lyr)  = 2;    % Snow grain shape option
-                                % 1=sphere; 2=spheroid; 3=hexagonal plate; 4=koch snowflake
+    % 1=sphere; 2=spheroid; 3=hexagonal plate; 4=koch snowflake
 
     sno_fs(1:nbr_lyr)   = 0;    % Shape factor: ratio of nonspherical grain effective radii to that of equal-volume sphere
-                                % 0=use recommended default value (He et al. 2017);
-                                % others(0<fs<1)= use user-specified value
-                                % only activated when sno_shp > 1 (i.e. nonspherical)
-                                
+    % 0=use recommended default value (He et al. 2017);
+    % others(0<fs<1)= use user-specified value
+    % only activated when sno_shp > 1 (i.e. nonspherical)
+
     sno_ar(1:nbr_lyr)   = 0;    % Aspect ratio: ratio of grain width to length
-                                % 0=use recommended default value (He et al. 2017);
-                                % others(0.1<fs<20)= use user-specified value
-                                % only activated when sno_shp > 1 (i.e. nonspherical)
-    
+    % 0=use recommended default value (He et al. 2017);
+    % others(0.1<fs<20)= use user-specified value
+    % only activated when sno_shp > 1 (i.e. nonspherical)
+
     % type of dust:
     dust_type = 1;              % 1=Saharan, 2=Colorado, 3=Greenland, 4=Mars
-    
+
     % type of volcanic ash:
     ash_type = 1;               % 1 = Eyjafjallajokull
-    
+
     % PARTICLE MASS MIXING RATIOS (units: ng g-1)
     % NOTE: This is mass of impurity per mass of snow
     %  (i.e., mass of impurity / mass of ice+impurity)
@@ -308,12 +318,12 @@ if (0==1)
     dcmf_pig_chla(1:nbr_lyr)         = 0.02;   % dry cell mass fraction of chlorophyll-a
     dcmf_pig_chlb(1:nbr_lyr)         = 0.02;   % dry cell mass fraction of chlorophyll-b
     dcmf_pig_cara(1:nbr_lyr)         = 0.05;   % dry cell mass fraction of photoprotective_carotenoids
-    dcmf_pig_carb(1:nbr_lyr)         = 0.00;   % dry cell mass fraction of photosynthetic_carotenoids  
-    
-    glc_alg_mss_cnc(1:nbr_lyr)       = [0];    % GLACIER algae [UNITS ng/g] 
+    dcmf_pig_carb(1:nbr_lyr)         = 0.00;   % dry cell mass fraction of photosynthetic_carotenoids
+
+    glc_alg_mss_cnc(1:nbr_lyr)       = [0];    % GLACIER algae [UNITS ng/g]
     glc_alg_rds(1)                   = [4];    % GLACIER algae radius [um]
     glc_alg_len(1)                   = [40];   % GLACIER algae length [um]
-    
+
 else
     % USE THE DRIVER INPUT ARGUMENTS
     direct_beam   = input_args.direct_beam;     % direct beam or diffuse
@@ -345,34 +355,31 @@ else
     mss_cnc_ash3  = input_args.mss_cnc_ash3;    % volcanic ash species 3 [ng/g]
     mss_cnc_ash4  = input_args.mss_cnc_ash4;    % volcanic ash species 4 [ng/g]
     mss_cnc_ash5  = input_args.mss_cnc_ash5;    % volcanic ash species 5 [ng/g]
-    
+
     snw_alg_cell_nbr_conc = input_args.snw_alg_cell_nbr_conc;   % algae [cells/mL]
     alg_rds               = input_args.alg_rds;         % mean cell radius (um)
     dcmf_pig_chla         = input_args.dcmf_pig_chla;   % dry cell mass fraction of chlorophyll-a
     dcmf_pig_chlb         = input_args.dcmf_pig_chlb;   % dry cell mass fraction of chlorophyll-b
     dcmf_pig_cara         = input_args.dcmf_pig_cara;   % dry cell mass fraction of photoprotective carotenoids
     dcmf_pig_carb         = input_args.dcmf_pig_carb;   % dry cell mass fraction of photosynthetic carotenoids
-    
-    glc_alg_mss_cnc       = input_args.glc_alg_mss_cnc;  % GLACIER algae [UNITS ng/g] 
+
+    glc_alg_mss_cnc       = input_args.glc_alg_mss_cnc;  % GLACIER algae [UNITS ng/g]
     glc_alg_rds           = input_args.glc_alg_rds;      % GLACIER algae radius [um]
     glc_alg_len           = input_args.glc_alg_len;      % GLACIER algae length [um]
 
     nbr_lyr       = length(dz);  % number of snow layers
 end;
 
-% density of pure ice [kg/m3]
-rho_ice =  917; 
+if (ice_ri == 4)
+    % density of pure co2 ice [kg/m3]
+    rho_ice = 1560; %kg/m³
+else
+    % density of pure h2o ice [kg/m3]
+    rho_ice =  917;
+end
 
 % density of air [kg / m3]
-rho_air = 1.025; 
-
-% Sub-directories of NetCDF files for 
-% (1) optical properties of light-absorbing impurities, 
-% (2) optical properties of snow algae,
-% (3) surface spectral irradiance profiles:
-dir_lai     = strcat(dir_op_root,'lai/');
-dir_alg     = strcat(dir_op_root,'alg_pig/');
-dir_spc     = strcat(dir_op_root,'fsds/');
+rho_air = 1.025;
 
 % Set wavelength grid (um) and wavelength number:
 wvl     = [0.205:0.01:4.995];
@@ -397,32 +404,53 @@ elseif (ice_ri == 4)
     ice_rfidx_im_str = strcat('im_',stb1);
 end;
 
-% find the first ice layer 
-%     occurs between the last snow layer and the first ice layer
-%     if the top layer is ice total refelction will occur @ high SZAs
-%     we recommend including a SSL to avoid aphysical results 
+% % % % find the first ice layer
+% % % %     (occurs between the last snow layer and the first ice layer)
 kfrsnl = find(lyr_typ==2, 1 );
 if isempty(kfrsnl) == 1
-                  kfrsnl=0;
+    kfrsnl=0;
 else
-    % read in precalcualted FL diffuse reflection  
+    % read in precalcualted FL diffuse reflection
     FL_r_dif_a = ncread(strcat(dir_op_root,'FL_reflection_diffuse.nc'),strcat('R_dif_fa_',stb1));
     FL_r_dif_b  = ncread(strcat(dir_op_root,'FL_reflection_diffuse.nc'),strcat('R_dif_fb_',stb1));
 end
+% % % %  % % % %  % % % %  % % % %  % % % %  % % % %  % % % %  % % % %  % % % %
 
+
+% % % %  % % % %  % % % %  % % % %  % % % %  % % % %  % % % %  % % % %  % % % %
 % subdirectory for ice optical properties:
 dir_ice  = strcat(dir_op_root,stb1,'/');
 
+% file substrings for ice Mie parameters:
+if (kfrsnl > 0 )
+    if (ice_ri == 4)
+       stb2 = 'bbl_in_co2ice';
+       dir_lai_ice = 'lai_in_co2ice'; 
+    else
+        stb2 = 'bbl_in_h2oice';
+        dir_lai_ice = 'lai_in_h2oice';
+    end
+end;
+
+% Sub-directories of NetCDF files for (1) optical properties of
+% light-absorbing impurities, (2) optical properties of snow algae,
+% and (3) surface spectral irradiance profiles:
+dir_lai_in_co2ice = strcat(dir_op_root,'lai_in_co2ice/');
+dir_lai_in_h2oice = strcat(dir_op_root,'lai_in_h2oice/');
+dir_lai_in_air    = strcat(dir_op_root,'lai_in_air/');
+dir_sno_alg       = strcat(dir_op_root,'sno_alg_pig/');
+dir_glac_alg       = strcat(dir_op_root,'glac_alg_pig/');
+dir_spc           = strcat(dir_op_root,'fsds/');
+
 % subdirectory for ice bubble optical properties:
-stb2 = 'bbl'; % for log normal bubble size dist
 dir_bbl  = strcat(dir_op_root,stb2,'/');
 
-% read file with ice refractive index 
+% read file with ice refractive index
 ice_rfidx_file = strcat(dir_op_root,"rfidx_ice.nc");
 
-% real and imaginary ice refractive index 
 rfidx_ice_re = ncread(ice_rfidx_file,ice_rfidx_re_str)';
 rfidx_ice_im = ncread(ice_rfidx_file,ice_rfidx_im_str)';
+rfidx_ice_im(isnan(rfidx_ice_im)) = rfidx_ice_im(14);
 
 % adjusted index of refraction for ice (Liou 2004 Eq. 5.4.18)
 temp1 = rfidx_ice_re.^2 - rfidx_ice_im.^2 +sin(acos(coszen)).^2;
@@ -442,7 +470,7 @@ if (dust_type==1)
     fl_dst1  = 'dust_balkanski_central_size1.nc';
     fl_dst2  = 'dust_balkanski_central_size2.nc';
     fl_dst3  = 'dust_balkanski_central_size3.nc';
-    fl_dst4  = 'dust_balkanski_central_size4.nc';
+    fl_dst4  = 'dust_balkanski_central_size4.nc'; 
     fl_dst5  = 'dust_balkanski_central_size5.nc';
 elseif (dust_type==2)
     fl_dst1  = 'dust_skiles_size1.nc';
@@ -473,27 +501,67 @@ if (ash_type==1)
 end;
 
 % create cell structure of impurity file names
-f1  = strcat(dir_lai,fl_sot1);
-f2  = strcat(dir_lai,fl_sot2);
-f3  = strcat(dir_lai,fl_brc1);
-f4  = strcat(dir_lai,fl_brc2);
-f5  = strcat(dir_lai,fl_dst1);
-f6  = strcat(dir_lai,fl_dst2);
-f7  = strcat(dir_lai,fl_dst3);
-f8  = strcat(dir_lai,fl_dst4);
-f9  = strcat(dir_lai,fl_dst5);
-f10 = strcat(dir_lai,fl_ash1);
-f11 = strcat(dir_lai,fl_ash2);
-f12 = strcat(dir_lai,fl_ash3);
-f13 = strcat(dir_lai,fl_ash4);
-f14 = strcat(dir_lai,fl_ash5);
-f15 = strcat(dir_alg,fl_glc_alg);
+f1  = strcat(dir_lai_in_air,fl_sot1);
+f2  = strcat(dir_lai_in_air,fl_sot2);
+f3  = strcat(dir_lai_in_air,fl_brc1);
+f4  = strcat(dir_lai_in_air,fl_brc2);
+f5  = strcat(dir_lai_in_air,fl_dst1);
+f6  = strcat(dir_lai_in_air,fl_dst2);
+f7  = strcat(dir_lai_in_air,fl_dst3);
+f8  = strcat(dir_lai_in_air,fl_dst4);
+f9  = strcat(dir_lai_in_air,fl_dst5);
+f10 = strcat(dir_lai_in_air,fl_ash1);
+f11 = strcat(dir_lai_in_air,fl_ash2);
+f12 = strcat(dir_lai_in_air,fl_ash3);
+f13 = strcat(dir_lai_in_air,fl_ash4);
+f14 = strcat(dir_lai_in_air,fl_ash5);
+f15 = strcat(dir_glac_alg,fl_glc_alg);
 
 tmp_char = strvcat(f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13,f14,f15);
-files    = cellstr(tmp_char);
+files_lai_in_air    = cellstr(tmp_char);
 
-% NUMBER OF PARTICLE SPECIES IN SNOW (ICE AND ALGAE EXCLUDED)
-tmp_sz  = size(files);
+% create cell structure of impurity file names
+g1  = strcat(dir_lai_in_h2oice,fl_sot1);
+g2  = strcat(dir_lai_in_h2oice,fl_sot2);
+g3  = strcat(dir_lai_in_h2oice,fl_brc1);
+g4  = strcat(dir_lai_in_h2oice,fl_brc2);
+g5  = strcat(dir_lai_in_h2oice,fl_dst1);
+g6  = strcat(dir_lai_in_h2oice,fl_dst2);
+g7  = strcat(dir_lai_in_h2oice,fl_dst3);
+g8  = strcat(dir_lai_in_h2oice,fl_dst4);
+g9  = strcat(dir_lai_in_h2oice,fl_dst5);
+g10 = strcat(dir_lai_in_h2oice,fl_ash1);
+g11 = strcat(dir_lai_in_h2oice,fl_ash2);
+g12 = strcat(dir_lai_in_h2oice,fl_ash3);
+g13 = strcat(dir_lai_in_h2oice,fl_ash4);
+g14 = strcat(dir_lai_in_h2oice,fl_ash5);
+g15 = strcat(dir_glac_alg,fl_glc_alg);
+
+tmp_char = strvcat(g1,g2,g3,g4,g5,g6,g7,g8,g9,g10,g11,g12,g13,g14,g15);
+files_lai_in_h2oice    = cellstr(tmp_char);
+
+% create cell structure of impurity file names
+g1  = strcat(dir_lai_in_co2ice,fl_sot1);
+g2  = strcat(dir_lai_in_co2ice,fl_sot2);
+g3  = strcat(dir_lai_in_co2ice,fl_brc1);
+g4  = strcat(dir_lai_in_co2ice,fl_brc2);
+g5  = strcat(dir_lai_in_co2ice,fl_dst1);
+g6  = strcat(dir_lai_in_co2ice,fl_dst2);
+g7  = strcat(dir_lai_in_co2ice,fl_dst3);
+g8  = strcat(dir_lai_in_co2ice,fl_dst4);
+g9  = strcat(dir_lai_in_co2ice,fl_dst5);
+g10 = strcat(dir_lai_in_co2ice,fl_ash1);
+g11 = strcat(dir_lai_in_co2ice,fl_ash2);
+g12 = strcat(dir_lai_in_co2ice,fl_ash3);
+g13 = strcat(dir_lai_in_co2ice,fl_ash4);
+g14 = strcat(dir_lai_in_co2ice,fl_ash5);
+g15 = strcat(dir_glac_alg,fl_glc_alg);
+
+tmp_char = strvcat(g1,g2,g3,g4,g5,g6,g7,g8,g9,g10,g11,g12,g13,g14,g15);
+files_lai_in_co2ice    = cellstr(tmp_char);
+
+% NUMBER OF PARTICLE SPECIES IN SNOW (ICE AND SNOW ALGAE EXCLUDED)
+tmp_sz  = size(files_lai_in_co2ice);
 nbr_aer = tmp_sz(1);
 
 % REFLECTANCE OF UNDERLYING SURFACE
@@ -530,7 +598,7 @@ end;
 
 % Set incident solar flux spectral distribution:
 if (direct_beam == 1)
- 
+
     % Option 1: Use zenith-angle-independent (60 degree) surface irradiance profile:
     %fi_spc = strcat(dir_spc,stb_spc1,stb_atm,'_clr.nc');
 
@@ -541,16 +609,16 @@ if (direct_beam == 1)
         % No zenith-angle dependence for TOA irradiance
         fi_spc  = strcat(dir_spc,stb_spc1,'toa.nc');
     end;
-    
+
     flx_slr                   = ncread(fi_spc,var_spc);
     flx_slr(find(flx_slr==0)) = 1E-30;
-    
+
     % direct-beam incident spectral flux [W/m2/band]
     Fs(1:nbr_wvl,1) = flx_dwn_bb.*flx_slr./(mu_not*pi);
-    
+
     % diffuse incident spectral flux [W/m2/band]:
     Fd(1:nbr_wvl,1) = 0;
-    
+
 elseif (direct_beam == 0)
     if (atm < 7)
         fi_spc  = strcat(dir_spc,stb_spc1,stb_atm,'_cld.nc');
@@ -561,10 +629,10 @@ elseif (direct_beam == 0)
 
     flx_slr                   = ncread(fi_spc,var_spc);
     flx_slr(find(flx_slr==0)) = 1E-30;
-    
+
     % direct-beam incident spectral flux [W/m2/band]
     Fd(1:nbr_wvl,1) = flx_dwn_bb.*flx_slr;
-    
+
     % diffuse incident spectral flux [W/m2/band]
     Fs(1:nbr_wvl,1) = 0;
 end;
@@ -599,21 +667,21 @@ rho_alg   = 1080;          % algae density [kg/m3] (consistent with Mie calculat
 
 % Establish layer-specific optical properties for ice and algae:
 for n=1:nbr_lyr
-    
+
     if lyr_typ(n) == 1 % SNOW
-        
+
         % ice grains (snow)
         fl_ice = strcat(dir_ice,stb1,'_',sprintf('%04d',rds_snw(n)),'.nc');
-        
+
         % single-scatter albedo, mass extinction coefficient, and
         % asymmetry paramater of ice:
         omega_ice(:,n)       = ncread(fl_ice,'ss_alb');
         ext_cff_mss_ice(:,n) = ncread(fl_ice,'ext_cff_mss');
-        
+
         %%% shape-dependent asymmetry factors (Cenlin He) %%%%
         if (sno_shp(n) == 1)  % spheres from Mie properties (original SNICAR scheme)
             g_ice(:,n)       = ncread(fl_ice,'asm_prm'); % asymmetry paramater
-            
+
         elseif (sno_shp(n) == 2) % 2=spheroid, He et al. (2017) parameterization
             diam_ice = 2.0 .* rds_snw(n); % effective snow grain diameter
             if (sno_fs(n) == 0)
@@ -629,7 +697,7 @@ for n=1:nbr_lyr
             end
             g_ice_Cg_tmp = g_b0 .* (fs_sphd/fs_hex).^g_b1 .* diam_ice.^g_b2; % Eq.7, He et al. (2017)
             gg_ice_F07_tmp = g_F07_c0 + g_F07_c1 .* AR_tmp + g_F07_c2 .* AR_tmp^2;% Eqn. 3.1 in Fu (2007)
-            
+
         elseif (sno_shp(n) == 3) % 3=hexagonal plate, He et al. 2017 parameterization
             diam_ice = 2.0 .* rds_snw(n); % effective snow grain diameter
             if (sno_fs(n) == 0)
@@ -645,7 +713,7 @@ for n=1:nbr_lyr
             end
             g_ice_Cg_tmp = g_b0 .* (fs_hex0/fs_hex).^g_b1 .* diam_ice.^g_b2; % Eq.7, He et al. (2017)
             gg_ice_F07_tmp = g_F07_p0 + g_F07_p1 .* log(AR_tmp) + g_F07_p2 .* (log(AR_tmp))^2;   % Eqn. 3.3 in Fu (2007)
-            
+
         elseif (sno_shp(n) == 4) % 4=koch snowflake, He et al. (2017) parameterization
             diam_ice = 2.0 .* rds_snw(n) ./ 0.544; % effective snow grain diameter
             if (sno_fs(n) == 0)
@@ -661,9 +729,9 @@ for n=1:nbr_lyr
             end
             g_ice_Cg_tmp = g_b0 .* (fs_koch/fs_hex).^g_b1 .* diam_ice.^g_b2; % Eq.7, He et al. (2017)
             gg_ice_F07_tmp = g_F07_p0 + g_F07_p1 .* log(AR_tmp) + g_F07_p2 .* (log(AR_tmp))^2;   % Eqn. 3.3 in Fu (2007)
-            
+
         end;
-        
+
         if (sno_shp(n) > 1)
             % 6 wavelength bands for g_ice to be interpolated into 480-bands of SNICAR
             % shape-preserving piecewise interpolation into 480-bands
@@ -673,79 +741,107 @@ for n=1:nbr_lyr
             g_ice(:,n) = g_ice_F07 .* g_Cg_intp; % Eq.6, He et al. (2017)
             g_ice(381:480,n) = g_ice(380); % assume same values for 4-5 um band, with very small biases (<3%)
         end;
-        
+
         g_ice(g_ice > 0.99) = 0.99; % avoid unreasonable values (so far only occur in large-size spheroid cases)
-        
-        
-        % Volume and number concentration are not relevant for snow layers set to NAN
+
+
+        % Volume and number concentration are not relevant for snow layers
+        % set to NAN
         No(n) = NaN;
         vlm_air(n) = NaN;
-        
-        % Specific surface area snow [m2/kg]
-        ssa(n) = 3/(rho_ice*(rds_snw(n)*(10^-6))); 
 
-    % ice with bubbles
-    elseif lyr_typ(n) == 2 % ice 
-        fl_ice              = strcat(dir_bbl,stb2,'_',sprintf('%04d',rds_snw(n)),'.nc');
+        % Specific surface area snow [m2/kg]
+        ssa(n) = 3/(rho_ice*(rds_snw(n)*(10^-6)));
+
+
+        % ice with bubbles
+    elseif lyr_typ(n) == 2 % ice
+
+
+        %fl_ice              = strcat(dir_bbl,'bbl','_',sprintf('%04d',rds_snw(n)),'.nc'); % for a monodisperse bubble distribution
+        fl_ice              = strcat(dir_bbl,'bbl_',sprintf('%04d',rds_snw(n)),'.nc');
         sca_cff_vlm         = ncread(fl_ice,'sca_cff_vlm'); % scattering cross section unit per volume of bubble
-        g_ice(:,n)          = ncread(fl_ice,'asm_prm');     % asymmetry parameter
-        abs_cff_mss_ice     = ((4 * pi * rfidx_ice_im) ./ (wvl * 1E-6))/rho_ice; % 
-        vlm_frac_air        = (rho_ice - rho_snw(n)) / rho_ice; % (rho_snw(n) - rho_ice) / (-rho_ice + rho_air); 
+        g_ice(:,n)          = ncread(fl_ice,'asm_prm');
+        abs_cff_mss_ice     = ((4 * pi * rfidx_ice_im) ./ (wvl * 1E-6))/rho_ice;
+        vlm_frac_air        = (rho_ice - rho_snw(n)) / rho_ice; % (rho_snw(n) - rho_ice) / (-rho_ice + rho_air);
         ext_cff_mss_ice(:,n)= ((sca_cff_vlm * vlm_frac_air) /rho_snw(n)) + abs_cff_mss_ice';
         omega_ice(:,n)      = ((sca_cff_vlm * vlm_frac_air) /rho_snw(n)) ./ ext_cff_mss_ice(:,n);
-        
-        % air bubble size distribution properties  
-         sigma_tilde_g = log(1.5);
-         d_eff_m = (rds_snw(n)*2)*(10^-6);
-        
-        % number concentration of bubbles [bubbles/m3]    
+
+        % air bubble size distribution properties
+        sigma_tilde_g = log(1.5);
+        d_eff_m = (rds_snw(n)*2)*(10^-6);
+
+        % number concentration of bubbles [bubbles/m3]
         No(n) = (6*vlm_frac_air)./(pi*d_eff_m.^3)*exp(3*sigma_tilde_g^2);
-        
+
         % Volume of air in ice [unitless: m3/m-3]
         vlm_air(n) = vlm_frac_air;
-        
+
         % Specific surface area ice [m2/kg]
         ssa(n) = (3*vlm_frac_air)/(rho_snw(n)*(rds_snw(n)*(10^-6)));
-        
+
     end
-    
+
     % algae, based on cell size and pigment concentrations:
     if (snw_alg_cell_nbr_conc(n) > 0)
-        fl_alg = strcat(dir_alg,...
+        fl_alg = strcat(dir_sno_alg,...
             'alg_sph_r',sprintf('%03d',round(alg_rds(n))),'um_',...
             'chla',sprintf('%03d',round(dcmf_pig_chla(n)*1000)),'_',...
             'chlb',sprintf('%03d',round(dcmf_pig_chlb(n)*1000)),'_',...
             'cara',sprintf('%03d',round(dcmf_pig_cara(n)*1000)),'_',...
             'carb',sprintf('%03d',round(dcmf_pig_carb(n)*1000)),...
             '.nc');
-        
+
         % check that derived alg-impurity file exists:
         if (exist(fl_alg,'file')~=2)
             error(strcat('Snow algae impurity file: ',fl_alg,' does not exist.'));
         end;
-        
+
         % single-scatter albedo, mass extinction coefficient, and
         % asymmetry paramater of snow algae:
         omega_snw_alg(:,n)       = ncread(fl_alg,'ss_alb');
         ext_cff_mss_snw_alg(:,n) = ncread(fl_alg,'ext_cff_mss');
         g_snw_alg(:,n)           = ncread(fl_alg,'asm_prm');
     end;
-    
-end % end loop over column layer
+
+end % end loop over snow layer
+
 
 % Read Mie LAI parameters (layer-independent)
 
-% read NetCDF properties for LAC 
+% read NetCDF properties
 for j=1:nbr_aer
-    fl_in                = char(files(j));
-    omega_aer(:,j)       = ncread(fl_in,'ss_alb');
-    g_aer(:,j)           = ncread(fl_in,'asm_prm');
+    fl_in                   = char(files_lai_in_air(j));
+    omega_aer_air(:,j)       = ncread(fl_in,'ss_alb');
+    g_aer_air(:,j)           = ncread(fl_in,'asm_prm');
     if ((j==2) | (j==4))
         % unique variable name for mass extinction coefficient of
         % coated aerosols (i.e., coated BC and coated BrC)
-        ext_cff_mss_aer(:,j) = ncread(fl_in,'ext_cff_mss_ncl');
+        ext_cff_mss_aer_air(:,j) = ncread(fl_in,'ext_cff_mss_ncl');
     else
-        ext_cff_mss_aer(:,j) = ncread(fl_in,'ext_cff_mss');
+        ext_cff_mss_aer_air(:,j) = ncread(fl_in,'ext_cff_mss');
+    end;
+
+    fl_in                      = char(files_lai_in_h2oice(j));
+    omega_aer_h2oice(:,j)       = ncread(fl_in,'ss_alb');
+    g_aer_h2oice(:,j)           = ncread(fl_in,'asm_prm');
+    if ((j==2) | (j==4))
+        % unique variable name for mass extinction coefficient of
+        % coated aerosols (i.e., coated BC and coated BrC)
+        ext_cff_mss_aer_h2oice(:,j) = ncread(fl_in,'ext_cff_mss_ncl');
+    else
+        ext_cff_mss_aer_h2oice(:,j) = ncread(fl_in,'ext_cff_mss');
+    end;
+
+    fl_in                      = char(files_lai_in_co2ice(j));
+    omega_aer_co2ice(:,j)        = ncread(fl_in,'ss_alb');
+    g_aer_co2ice(:,j)           = ncread(fl_in,'asm_prm');
+    if ((j==2) | (j==4))
+        % unique variable name for mass extinction coefficient of
+        % coated aerosols (i.e., coated BC and coated BrC)
+        ext_cff_mss_aer_co2ice(:,j) = ncread(fl_in,'ext_cff_mss_ncl');
+    else
+        ext_cff_mss_aer_co2ice(:,j) = ncread(fl_in,'ext_cff_mss');
     end;
 end
 
@@ -772,64 +868,82 @@ mss_cnc_aer(1:nbr_lyr,15)  = glc_alg_mss_cnc.*1E-9;
 
 % Calculate effective tau, omega, g for the (ice+algae+impurity) system
 for n=1:nbr_lyr
-    
+
     % Snow column mass [kg/m^2] (array)
     % Mass of snow is ice+impurities
     L_snw(n)     = rho_snw(n)*dz(n);
+
+    % burden and optical thickness of algae
+    if (snw_alg_cell_nbr_conc(n) > 0)
+        % mean algal cell volume (3rd moment of Gaussian distribution) by layer:
+        mean_vol_cell  = 4/3*pi * (alg_rds(n)^3 + 3*alg_rds(n)*sigma_alg(n)^2); %[um^3/cell]
+
+        % mean mass per cell by layer:
+        mass_per_cell  = mean_vol_cell*1E-18*rho_alg; % [kg/cell]
+
+        % mass concentration of algae by layer
+        mss_cnc_alg(n) = snw_alg_cell_nbr_conc(n)*1000*mass_per_cell; % [kg/kg]
+
+        L_alg(n)     = L_snw(n)*mss_cnc_alg(n);
+        tau_alg(:,n) = L_alg(n).*ext_cff_mss_snw_alg(:,n);
+    else
+        L_alg(n)     = 0.0;
+        tau_alg(:,n) = 0.0;
+    end;
+
+    if lyr_typ(n) == 1 % snow 
+        ext_cff_mss_aer = ext_cff_mss_aer_air;
+        omega_aer       = omega_aer_air;
+        g_aer           = g_aer_air;
     
-     % burden and optical thickness of algae
-     if (snw_alg_cell_nbr_conc(n) > 0)
-         % mean algal cell volume (3rd moment of Gaussian distribution) by layer:
-         mean_vol_cell  = 4/3*pi * (alg_rds(n)^3 + 3*alg_rds(n)*sigma_alg(n)^2); %[um^3/cell]
-         
-         % mean mass per cell by layer:
-         mass_per_cell  = mean_vol_cell*1E-18*rho_alg; % [kg/cell]
-         
-         % mass concentration of algae by layer
-         mss_cnc_alg(n) = snw_alg_cell_nbr_conc(n)*1000*mass_per_cell; % [kg/kg]
-         
-         L_alg(n)     = L_snw(n)*mss_cnc_alg(n);
-         tau_alg(:,n) = L_alg(n).*ext_cff_mss_snw_alg(:,n);
-     else
-         L_alg(n)     = 0.0;
-         tau_alg(:,n) = 0.0;
-     end;
-    
+    elseif lyr_typ(n) == 2 % ice
+        if (ice_ri == 4) % CO2 ice 
+            ext_cff_mss_aer = ext_cff_mss_aer_co2ice;
+            omega_aer       = omega_aer_co2ice;
+            g_aer           = g_aer_co2ice;
+        else
+            ext_cff_mss_aer = ext_cff_mss_aer_h2oice;
+            omega_aer       = omega_aer_h2oice;
+            g_aer           = g_aer_h2oice;
+
+        end
+    end
+
     % burdens and optical thicknesses of LAI
     for j=1:nbr_aer
         L_aer(n,j)     = L_snw(n)*mss_cnc_aer(n,j);
         tau_aer(:,n,j) = L_aer(n,j).*ext_cff_mss_aer(:,j);
     end
-    
+
     % ice mass = snow mass - impurity mass (generally a tiny correction)
     L_ice(n)     =  L_snw(n) - L_alg(n) - sum(L_aer(n,:));
-    
+
     if (L_ice(n) < 0)
         error(['Impurity load cannot exceed snow load. Snow mass ' ...
-               'is assumed to be that of ice+impurities, so the sum ' ...
-               'of impurity mixing ratios cannot exceed 1']);
+            'is assumed to be that of ice+impurities, so the sum ' ...
+            'of impurity mixing ratios cannot exceed 1']);
     end;
-    
+
     % optical thickness due to ice:
     tau_ice(:,n) = L_ice(n).*ext_cff_mss_ice(:,n);
-    
+
     tau_sum(1:nbr_wvl,1)   = 0.0;
     omega_sum(1:nbr_wvl,1) = 0.0;
     g_sum(1:nbr_wvl,1)     = 0.0;
-    
+
     for j=1:nbr_aer
         tau_sum   = tau_sum + tau_aer(:,n,j);
         omega_sum = omega_sum + (tau_aer(:,n,j).*omega_aer(:,j));
         g_sum     = g_sum + (tau_aer(:,n,j).*omega_aer(:,j).*g_aer(:,j));
     end
-  
+
     % add algae contribution to weighted LAI sums:
     if (snw_alg_cell_nbr_conc(n) > 0)
         tau_sum   = tau_sum + tau_alg(:,n);
         omega_sum = omega_sum + (tau_alg(:,n).*omega_snw_alg(:,n));
         g_sum     = g_sum + (tau_alg(:,n).*omega_snw_alg(:,n).*g_snw_alg(:,n));
     end;
-    
+
     % weighted sums, including ice:
     tau(:,n)   = tau_sum + tau_ice(:,n);
     omega(:,n) = (1./tau(:,n)).*(omega_sum+ (omega_ice(:,n).*tau_ice(:,n)));
@@ -842,10 +956,10 @@ tau0    = tau;
 g0      = g;
 omega0  = omega;
 
-epsilon = 1e-5;     %to deal with singularity in alpha and gamma 
+epsilon = 1e-5;     %to deal with singularity in alpha and gamma
 exp_min = 1e-5;     %exp(-500); % minimum number that is not zero - zero will raise error
 trmin   = 1e-4;     %minimum transmissivity
-puny    = 1e-10;    
+puny    = 1e-10;    %not sure how should we define this
 
 
 gauspt = [0.9894009, 0.9445750, 0.8656312, 0.7554044, ... % gaussian angles (radians)
@@ -862,23 +976,23 @@ for iw = 1: nbr_wvl;
         rupdif(iw,k) = 0;   %reflectivity to diffuse radiation for layers below
         rdndif(iw,k) = 0;   %reflectivity to diffuse radiation for layers above
     end
-    
+
     %! initialize top interface of top layer
     trndir(iw,1) =  1;
     trntdr(iw,1) =  1;
     trndif(iw,1) =  1;
     rdndif(iw,1) =  0;
-    
+
 end;
 
 % ! proceed down one layer at a time; if the total transmission to
 % ! the interface just above a given layer is less than trmin, then no
 % ! Delta-Eddington computation for that layer is done.
 for iw = 1:nbr_wvl      %wavelengths
-    
+
     %! begin main level loop
     for k = 1:nbr_lyr   %number of layers
-        
+
         %! initialize all layer apparent optical properties to 0
         rdir  (k) = 0;  %layer reflectivity to direct radiation
         rdif_a(k) = 0;  %layer reflectivity to diffuse radiation from above
@@ -887,53 +1001,53 @@ for iw = 1:nbr_wvl      %wavelengths
         tdif_a(k) = 0;  %layer transmission to diffuse radiation from above
         tdif_b(k) = 0;  %layer transmission to diffuse radiation from below
         trnlay(k) = 0;  %solar beam transm for layer (direct beam only)
-        
+
         %    ! compute next layer Delta-eddington solution only if total transmission
         %    ! of radiation to the interface just above the layer exceeds trmin.
-        
+
         if (trntdr(iw,k) > trmin )
             %    ! initialize current layer properties to zero; only if total
             %    ! transmission to the top interface of the current layer exceeds the
             %    ! minimum, will these values be computed below:
             mu0 = mu_not;
-          
-            % ice adjusted refractive index (Liou 2002)
-            nr = Nreal(iw);
+
+            % ice adjusted refractive index
+            nr =Nreal(iw);
 
             if(k < kfrsnl || kfrsnl==0)
-                % above FL mu0 is unchanged 
+                % above FL mu0 is unchanged
                 mu0n = mu0;
             elseif(k >= kfrsnl)
                 % mu0 under the Fresnel Layer
                 % Eq. (5.4.13) Liou 2002
-                mu0n = cos(asin(sin(acos(mu0))/nr)); 
+                mu0n = cos(asin(sin(acos(mu0))/nr));
             end
-            
+
             %! calculation over layers with penetrating radiation
             tautot = tau0(iw,k);
             wtot   = omega0(iw,k);
             gtot   = g0(iw,k);
             ftot   = g0(iw,k) * g0(iw,k);
-            
+
             % coefficient for delta eddington solution for all layers;
             % Eq. 50: Briegleb and Light 2007
             ts   = (1-wtot.*ftot) .* tautot;         %layer delta-scaled extinction optical depth
             ws   = ((1-ftot).*wtot)./(1-wtot.*ftot); %layer delta-scaled single scattering albedo
-            gs   = gtot/(1+gtot);                    %layer delta-scaled asymmetry parameter 
+            gs   = gtot/(1+gtot);                    %layer delta-scaled asymmetry parameter
             lm   = sqrt(3*(1-ws) .* (1-ws.*gs));     %lambda
             ue   = 1.5 * (1-ws.*gs)./lm;             %u equation, term in diffuse reflectivity and transmissivity
-           
+
             extins = max(exp_min, exp(-lm*ts));       %extinction, MAX function keeps from getting an error if the exp(-lm*ts) is < 1e-5
             ne     = (ue+1).^2./extins - (ue-1).^2.*extins; %N equation, term in diffuse reflectivity and transmissivity
-            
+
             % ! first calculation of rdif, tdif using Delta-Eddington formulas
             % Eq.: Briegleb 1992; alpha and gamma for direct radiation
             rdif_a(k) = (ue.^2-1)*(1/extins - extins)/ne;   %R BAR = layer reflectivity to DIFFUSE radiation
             tdif_a(k) = 4*ue/ne;                            %T BAR layer transmissivity to DIFFUSE radiation
-            
+
             %   ! evaluate rdir,tdir for direct beam
             trnlay(k) = max(exp_min, exp(-ts/mu0n));        % transmission from TOA to interface
-            
+
             %  Eq. 50: Briegleb and Light 2007; alpha and gamma for direct radiation
             alp = (0.75.*ws.*mu0n) ...
                 .* (1 + gs.*(1-ws))...
@@ -945,32 +1059,32 @@ for iw = 1:nbr_wvl      %wavelengths
             amg = alp - gam;
             rdir(k) = apg*rdif_a(k) +  amg*(tdif_a(k)*trnlay(k) - 1);   %layer reflectivity to DIRECT radiation
             tdir(k) = apg*tdif_a(k) + (amg* rdif_a(k)-apg+1)*trnlay(k); %layer transmissivity to DIRECT radiation
-            
+
             %    ! recalculate rdif,tdif using direct angular integration over rdir,tdir,
             %    ! since Delta-Eddington rdif formula is not well-behaved (it is usually
             %    ! biased low and can even be negative); use ngmax angles and gaussian
             %    ! integration for most accuracy:
-            
+
             R1 = rdif_a(k); %! use R1 as temporary
             T1 = tdif_a(k); %! use T1 as temporary
             swt = 0;
             smr = 0;
             smt = 0;
-            
+
             % loop through the gaussian angles for the AD integral
             for ng=1:length(gauspt)     %gaussian angles (radians)
                 mu  = gauspt(ng);       %solar zenith angles
                 gwt = gauswt(ng);       %gaussian weight
                 swt = swt + mu*gwt;     % sum of weights
                 trn = max(exp_min, exp(-ts/mu)); %transmission
-                
+
                 alp = (0.75.*ws.*mu) ...
                     .* (1 + gs.*(1-ws))...
                     ./ (1 - lm.^2 .* mu.^2 + epsilon); %alp = alpha(ws,mu0n,gs,lm)
                 gam = (0.5 .* ws)...
                     .* (1 + 3.*gs.*mu.^2.*(1-ws))...
                     ./ (1-lm.^2 .* mu.^2 + epsilon);%gam = gamma(ws,mu0n,gs,lm)
-                
+
                 apg = alp + gam;
                 amg = alp - gam;
                 rdr = apg*R1 + amg*T1*trn - amg;
@@ -978,94 +1092,94 @@ for iw = 1:nbr_wvl      %wavelengths
                 smr = smr + mu*rdr*gwt; %accumulator for rdif gaussian integration
                 smt = smt + mu*tdr*gwt; %accumulator for tdif gaussian integration
             end      %! ng; gaussian angles for the AD integral
-            
-            rdif_a(k) = smr/swt; 
+
+            rdif_a(k) = smr/swt;
             tdif_a(k) = smt/swt;
-            
+
             %! homogeneous layer
             rdif_b(k) = rdif_a(k);
             tdif_b(k) = tdif_a(k);
-            
+
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             % Fresnel layer
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             if (k == kfrsnl)
-                
-                % ice complex index of refraction 
+
+                % ice complex index of refraction
                 refindx = complex(rfidx_ice_re(iw),rfidx_ice_im(iw));
-                
-                % critical angle where total internal reflection occurs 
+
+                % critical angle where total internal reflection occurs
                 critical_angle = asin(refindx);
-                
-                % compare incoming angle to critical angle 
+
+                % compare incoming angle to critical angle
                 if acos(mu_not) < critical_angle
-                    
-                %! compute fresnel reflection and transmission amplitudes
-                %! for two polarizations: 1=perpendicular and 2=parallel to
-                %! the plane containing incident, reflected and refracted rays.
-                    
+
+                    %! compute fresnel reflection and transmission amplitudes
+                    %! for two polarizations: 1=perpendicular and 2=parallel to
+                    %! the plane containing incident, reflected and refracted rays.
+
                     %! Eq. (5.4.18a-b); Liou 2002
                     R1 = (mu0-nr*mu0n) / (mu0 + nr*mu0n);      %reflection amplitude factor for perpendicular polarization
                     R2 = (nr*mu0 - mu0n) / (nr*mu0 + mu0n);    %reflection amplitude factor for parallel polarization
                     T1 = 2*mu0 / (mu0 + nr*mu0n);              %transmission amplitude factor for perpendicular polarization
                     T2 = 2*mu0 / (nr*mu0 + mu0n);              %transmission amplitude factor for parallel polarization
-                    
+
                     %! unpolarized light for direct beam
                     %! Eq. 21; Brigleb and light 2007
                     Rf_dir_a = 0.5 * ((R1^2) + (R2^2));
                     Tf_dir_a = 0.5 * (T1*T1 + T2*T2)*nr*mu0n/mu0;
-               
-                else % total internal reflection 
-                    Tf_dir_a = 0;
-                    Rf_dir_a = 1;
-                    
-                end % if critical angle check 
-                
+
+                else % total internal reflection
+                    Tf_dir_a = 0;%epsilon;
+                    Rf_dir_a = 1;%-epsilon;
+
+                end % if critical angle check
+
                 %      ! precalculated diffuse reflectivities and transmissivities
                 %      ! for incident radiation above and below fresnel layer, using
                 %      ! the direct albedos and accounting for complete internal
                 %      ! reflection from below; precalculated because high order
                 %      ! number of gaussian points is required for convergence:
-                
+
                 Rf_dif_a = FL_r_dif_a(iw);
                 Tf_dif_a = 1 - Rf_dif_a;
                 Rf_dif_b = FL_r_dif_b(iw);
                 Tf_dif_b = 1 - Rf_dif_b;
-                
+
                 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                 %! the k = kfrsnl layer properties are updated to combined
                 %! the fresnel (refractive) layer, always taken to be above
                 %! the present layer k (i.e. be the top interface):
-                
+
                 rintfc   = 1 / (1-Rf_dif_b*rdif_a(k)); % denom interface scattering
-                
+
                 tdir(k)   = Tf_dir_a*tdir(k) + ...    % layer transmissivity to DIRECT radiation
                     Tf_dir_a*rdir(k) * ...            % Eq. B7; Briegleb & Light 2007
                     Rf_dif_b*rintfc*tdif_a(k);
-                
+
                 rdir(k)   = Rf_dir_a + ...            % layer reflectivity to DIRECT radiation
                     Tf_dir_a*rdir(k) * ...            % Eq. B7; Briegleb & Light 2007
                     rintfc*Tf_dif_b;
-                
+
                 rdif_a(k) = Rf_dif_a + ...            % R BAR = layer reflectivity to DIFFUSE radiation (above)
                     Tf_dif_a*rdif_a(k) * ...          % Eq. B9; Briegleb & Light 2007
                     rintfc*Tf_dif_b;
-                
+
                 rdif_b(k) = rdif_b(k) + ...           % R BAR = layer reflectivity to DIFFUSE radiation (below)
                     tdif_b(k)*Rf_dif_b * ...          % Eq. B10; Briegleb & Light 2007
                     rintfc*tdif_a(k);
-                
+
                 tdif_a(k) = tdif_a(k)*rintfc*Tf_dif_a;  % T BAR layer transmissivity to DIFFUSE radiation (above), Eq. B9; Briegleb & Light 2007
                 tdif_b(k) = tdif_b(k)*rintfc*Tf_dif_b;  % Eq. B10; Briegleb & Light 2007
-                
+
                 %! update trnlay to include fresnel transmission
                 trnlay(k) = Tf_dir_a*trnlay(k);
-                
+
             end     %k = kfrsnl
-           
-            
+
+
         end %! trntdr(k,iw) > trmin
-        
+
         %       ! Calculate the solar beam transmission, total transmission, and
         %       ! reflectivity for diffuse radiation from below at interface k,
         %       ! the top of the current layer k:
@@ -1085,26 +1199,26 @@ for iw = 1:nbr_wvl      %wavelengths
         %       !                k-1
         %       !       ---------------------  k
         %       !       \\\\\\\ ocean \\\\\\\
-        
+
         % Eq. 51; Briegleb and Light 2007
         trndir(iw,k+1) = trndir(iw,k)*trnlay(k); % solar beam transmission from top
-                                    % trnlay = exp(-ts/mu_not) = direct solar beam transmission
+        % trnlay = exp(-ts/mu_not) = direct solar beam transmission
         refkm1         = 1/(1 - rdndif(iw,k)*rdif_a(k)); %interface multiple scattering for k-1
-        
+
         tdrrdir        = trndir(iw,k)*rdir(k);           %direct tran times layer direct ref
-        
+
         tdndif         = trntdr(iw,k) - trndir(iw,k);    %total down diffuse = tot tran - direct tran
-        
+
         trntdr(iw,k+1) = trndir(iw,k)*tdir(k) + ...
             (tdndif + tdrrdir*rdndif(iw,k))*refkm1*tdif_a(k); %total transmission for layers above
-        
+
         %Eq. 51; Briegleb and Light 2007
         rdndif(iw,k+1) = rdif_b(k) + ...
             (tdif_b(k)*rdndif(iw,k)*refkm1*tdif_a(k));   %reflectivity to diffuse radiation for layers above
         trndif(iw,k+1) = trndif(iw,k)*refkm1*tdif_a(k);  %diffuse transmission to diffuse beam for layers above
-        
+
     end       %! k   end main level loop; number of layers
-    
+
     % ! compute reflectivity to direct and diffuse radiation for layers
     % ! below by adding succesive layers starting from the underlying
     % ! ocean and working upwards:
@@ -1116,17 +1230,17 @@ for iw = 1:nbr_wvl      %wavelengths
     % !       ---------------------  k+1
     % !                k+1
     % !       ---------------------
-    
+
     % set the underlying ground albedo
     rupdir(iw,nbr_lyr+1) = R_sfc(iw);   % reflectivity to direct radiation for layers below
     rupdif(iw,nbr_lyr+1) = R_sfc(iw);   % reflectivity to diffuse radiation for layers below
-    
+
     for k=nbr_lyr:-1:1  % starts at the bottom and works its way up to the top layer
-        
+
         %Eq. B2; Briegleb and Light 2007
         %! interface scattering
         refkp1        = 1/( 1 - rdif_b(k)*rupdif(iw,k+1));
-        
+
         %   ! dir from top layer plus exp tran ref from lower layer, interface
         %   ! scattered and tran thru top layer from below, plus diff tran ref
         %   ! from lower layer with interface scattering tran thru top from below
@@ -1137,14 +1251,14 @@ for iw = 1:nbr_wvl      %wavelengths
         %   ! interface scattered which tran top from below
         rupdif(iw,k) = rdif_a(k) + tdif_a(k)*rupdif(iw,k+1)*refkp1*tdif_b(k);
     end      %! k
-    
+
 end      %! iw; number of wavelengths
 
 % fluxes at interface
 
 for iw = 1:nbr_wvl
     for k=1:nbr_lyr+1
-        
+
         % Eq. 52; Briegleb and Light 2007
         %! interface scattering
         refk          = 1/(1 - rdndif(iw,k)*rupdif(iw,k));
@@ -1214,7 +1328,6 @@ F_abs_slr_btm = sum(F_btm_net);
 F_abs_vis_btm = sum(F_btm_net(1:vis_max_idx));
 F_abs_nir_btm = sum(F_btm_net(vis_max_idx+1:nir_max_idx));
 
-
 % Radiative heating rate:
 heating_rate = F_abs_slr./(L_snw.*2117);   %[K/s], 2117 = specific heat ice (J kg-1 K-1)
 heating_rate = heating_rate.*3600;         %[K/hr]
@@ -1242,10 +1355,16 @@ albedo  = F_up(:,1)./F_dwn(:,1);
 alb_bb  = sum(flx_slr.*albedo)./sum(flx_slr);
 
 alb_vis = sum(flx_slr(1:vis_max_idx).*albedo(1:vis_max_idx))/...
-          sum(flx_slr(1:vis_max_idx));
+    sum(flx_slr(1:vis_max_idx));
 
 alb_nir = sum(flx_slr(vis_max_idx+1:nir_max_idx).*albedo(vis_max_idx+1:nir_max_idx))/...
-          sum(flx_slr(vis_max_idx+1:nir_max_idx));
+    sum(flx_slr(vis_max_idx+1:nir_max_idx));
+
+alb_modis_bnd2 = sum(flx_slr(65:67).*albedo(65:67))/...
+    sum(flx_slr(65:67));
+
+alb_modis_bnd5 = sum(flx_slr(103:105).*albedo(103:105))/...
+    sum(flx_slr(103:105));
 
 
 % Spectrally-integrated VIS and NIR total snowpack absorption:
@@ -1265,9 +1384,11 @@ data_out.albedo          = albedo';            % spectral hemispheric albedo
 data_out.alb_slr         = alb_bb;             % solar broadband albedo
 data_out.alb_vis         = alb_vis;            % visible (0.2-0.7um) albedo
 data_out.alb_nir         = alb_nir;            % near-IR (0.7-5.0um) albedo
+data_out.alb_modis_bnd2  = alb_modis_bnd2;
+data_out.alb_modis_bnd5  = alb_modis_bnd5;
 
 data_out.abs_snw_slr     = sum(F_abs_slr);     % total solar absorption by entire snow column (not including underlying substrate) [W/m2]
-data_out.abs_snw_vis     = sum(F_abs_vis);     % visible solar absorption by entire snow column (not including underlying substrate) [W/m2]
+data_out.abs_snw_vis     = sum(F_abs_vis);     % visible solar absorption by entire snow column (not including underlying substrate) [rho_iceW/m2]
 data_out.abs_snw_nir     = sum(F_abs_nir);     % near-IR solar absorption by entire snow column (not including underlying substrate) [W/m2]
 data_out.abs_spc         = sum(F_abs,2)';      % spectral absorption by entire snow column [W/m2/band]
 
@@ -1287,12 +1408,12 @@ data_out.vlm_frc_air    = vlm_air;            % volume fraction of air in each i
 data_out.No_bbl_cnc     = No;                 % number concentration of air bubbles in ice [bbls/m3]
 data_out.ssa            = ssa;                % specific surface area of snow or ice [m2/kg]
 
-
 if (0==1)
+
     figure(1)
     hold on
     plot(data_out.wvl,data_out.albedo,'linewidth',3,'DisplayName','SNICAR-ADv3');
-    axis([0.2 1.8 0 1]);
+    axis([0.2 5 0 1]);
     set(gca,'xtick',0.2:0.2:1.8,'fontsize',14)
     set(gca,'ytick',0:0.1:1,'fontsize',14);
     xlabel('Wavelength (\mum)','fontsize',20);
@@ -1306,7 +1427,7 @@ end % end of function
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%  REFERENCES  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% 
+%
 % Balkanski, Y., M. Schulz, T. Claquin, and S. Guibert (2007),
 % Reevaluation of mineral aerosol radiative forcings suggests a better
 % agreement with satellite and AERONET data, Atmos. Chem. Phys., 7
@@ -1323,14 +1444,14 @@ end % end of function
 % based model and discussion of empirical methods for characterising
 % biological influence on ice and snow albedo, The Cryosphere, 11,
 % 2611-2632, doi: 10.5194/tc-11-2611-2017.
-% 
-% Cook, J. M., Tedstone, A. J., Williamson, C., McCutcheon, J., Hodson, 
-% A. J., Dayal, A., Skiles, M., Hofer, S., Bryant, R., McAree, 
-% O., McGonigle, A., Ryan, J., Anesio, A. M., Irvine-Fynn, 
-% T. D. L., Hubbard, A., Hanna, E., Flanner, M., Mayanna, 
-% S., Benning, L. G., ? Tranter, M. (2020). 
-% Glacier algae accelerate melt rates on the south-western Greenland 
-% Ice Sheet. The Cryosphere, 14(1), 309?330. 
+%
+% Cook, J. M., Tedstone, A. J., Williamson, C., McCutcheon, J., Hodson,
+% A. J., Dayal, A., Skiles, M., Hofer, S., Bryant, R., McAree,
+% O., McGonigle, A., Ryan, J., Anesio, A. M., Irvine-Fynn,
+% T. D. L., Hubbard, A., Hanna, E., Flanner, M., Mayanna,
+% S., Benning, L. G., ? Tranter, M. (2020).
+% Glacier algae accelerate melt rates on the south-western Greenland
+% Ice Sheet. The Cryosphere, 14(1), 309?330.
 % https://doi.org/10.5194/tc-14-309-2020
 %
 % Dang, C., Zender, C. S., and Flanner, M. G. (2019), Intercomparison
@@ -1338,11 +1459,6 @@ end % end of function
 % in Earth system models for a unified treatment of cryospheric
 % surfaces, The Cryosphere, 13, 2325-2343,
 % doi:10.5194/tc-13-2325-2019.
-% 
-% Flanner, M. G., Arnheim, J., Cook, J. M., Dang, C., He, C., Huang, X., 
-% Singh, D., Skiles, S. M., Whicker, C. A., and Zender, C. S.: SNICAR-AD v3: 
-% A Community Tool for Modeling Spectral Snow Albedo, 1?49, 
-% https://doi.org/10.5194/gmd-2021-182, 2021.
 %
 % Flanner, M. G., A. S. Gardner, S. Eckhardt, A. Stohl, J. Perket
 % (2014), Aerosol radiative forcing from the 2010 Eyjafjallajokull
@@ -1374,9 +1490,6 @@ end % end of function
 % Lawrence, D. and others (2018), Technical Description of version 5.0
 % of the Community Land Model (CLM),
 % http://www.cesm.ucar.edu/models/cesm2/land/CLM50_Tech_Note.pdf
-%
-% Liou, K. N.: An Introduction to Atmospheric Radiation, Academic Press, 
-% Amsterdam, 2002.
 %
 % Picard, G., Libois, Q., and Arnaud, L. (2016), Refinement of the ice
 % absorption spectrum in the visible using radiance profile
